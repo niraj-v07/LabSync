@@ -1,11 +1,133 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>LabSync</title>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+        <style>
+            :root {
+                --text: #1c2430;
+                --muted: #6b7686;
+                --primary: #3b5bdb;
+                --primary-dark: #2f49b5;
+            }
+            body {
+                font-family: 'Inter', Arial, sans-serif;
+                margin: 0;
+                min-height: 100vh;
+                color: var(--text);
+                background: linear-gradient(135deg, #edf2ff 0%, #f6f8fb 50%, #e7f5ff 100%);
+            }
+            marquee h2 {
+                margin: 0;
+                padding: 14px 0;
+                color: var(--primary);
+                font-weight: 700;
+            }
+            hr {
+                border: 0;
+                height: 1px;
+                background: #dbe2ef;
+                margin: 0;
+            }
+            div {
+                background: #ffffff;
+                border: 1px solid #e5e9f0;
+                border-radius: 16px;
+                padding: 28px 32px;
+                box-shadow: 0 10px 30px rgba(59, 91, 219, 0.15);
+                width: min(90%, 340px);
+
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+            table {
+                border-spacing: 10px;
+                width: 100%;
+            }
+            td {
+                font-size: 14px;
+                font-weight: 500;
+                color: var(--muted);
+            }
+            img {
+                display: block;
+                margin: 0 auto;
+            }
+            input[type="email"],
+            input[type="password"],
+            select {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 10px 12px;
+                border: 1px solid #d5dbe5;
+                border-radius: 8px;
+                font-family: inherit;
+                font-size: 14px;
+                background: #fff;
+            }
+            input:focus,
+            select:focus {
+                outline: none;
+                border-color: var(--primary);
+                box-shadow: 0 0 0 3px rgba(59, 91, 219, 0.15);
+            }
+            input[type="submit"] {
+                width: 100%;
+                padding: 11px;
+                margin-top: 6px;
+                background: var(--primary);
+                color: #fff;
+                border: 0;
+                border-radius: 8px;
+                font-family: inherit;
+                font-size: 15px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+            input[type="submit"]:hover {
+                background: var(--primary-dark);
+            }
+        </style>
     </head>
     <body>
-        <img src="logo.png" width="200px" height="150px">
-        <h1>Coming soon.</h1>
-
+        <marquee><h2>Welcome to LabSync!</h2></marquee>
+        <hr>
+        <div>
+            <img src="logo.png" alt="LabSync logo" width="200" height="150">
+            <form id="loginForm">
+                <table>
+                    <tr>
+                        <td>Email id:</td>
+                        <td><input type="email" id="email" placeholder="you@college.edu" required></td>
+                    </tr>
+                    <tr>
+                        <td>Password:</td>
+                        <td><input type="password" id="password" placeholder="Enter password" required></td>
+                    </tr>
+                    <tr>
+                        <td>Role:</td>
+                        <td>
+                            <select id="role">
+                                <option value="student">Student</option>
+                                <option value="admin">Lab In-charge</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="text-align:center;">
+                            <input type="submit" value="Login">
+                        </td>
+                    </tr>
+                </table>
+            </form>
+        </div>
     </body>
 </html>
