@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head><title>Firebase test</title></head>
+<body>
+    <h2>Firebase test</h2>
+    <p id="result">Testing...</p>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDXJ_RL5_5gFb5oUMCi1fF2YOJZ8s9i4qM",
+            authDomain: "mylabsync.firebaseapp.com",
+            projectId: "mylabsync",
+            storageBucket: "mylabsync.firebasestorage.app",
+            messagingSenderId: "144560486400",
+            appId: "1:144560486400:web:5bd10056296627f84880e5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        try {
+            await addDoc(collection(db, "test"), { message: "hello from LabSync", time: Date.now() });
+            const snap = await getDocs(collection(db, "test"));
+            document.getElementById("result").textContent = "Works! Documents in test: " + snap.size;
+        } catch (err) {
+            document.getElementById("result").textContent = "Error: " + err.message;
+        }
+    </script>
+</body>
+</html>
