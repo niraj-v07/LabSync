@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LabSync | Student</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --text: #1c2430;
+            --muted: #6b7686;
+            --primary: #3b5bdb;
+            --success: #2f9e44;
+            --warning: #f08c00;
+            --danger: #e03131;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--card); padding: 14px 28px; border-bottom: 1px solid #e5e9f0;
+        }
+        header h2 { margin: 0; color: var(--primary); }
+        header span { color: var(--muted); font-size: 14px; margin-right: 12px; }
+        main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+        .card {
+            background: var(--card); border-radius: 14px; padding: 22px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 22px;
+        }
+        .card h3 { margin-top: 0; }
+        label { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin: 12px 0 4px; }
+        input, select, textarea {
+            width: 100%; padding: 10px 12px; border: 1px solid #d5dbe5; border-radius: 8px;
+            font-family: inherit; font-size: 14px;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,91,219,.15);
+        }
+        button {
+            background: var(--primary); color: #fff; border: 0; padding: 10px 18px;
+            border-radius: 8px; font-family: inherit; font-weight: 600; cursor: pointer;
+        }
+        button.ghost { background: #edf2ff; color: var(--primary); }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+        .lab, .request { border: 1px solid #e5e9f0; border-radius: 12px; padding: 16px; margin-top: 14px; }
+        .lab-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .lab h4, .request h4 { margin: 0; font-size: 17px; }
+        .lab p, .request p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+        .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; color: #fff; font-weight: 600; }
+        .Free, .Approved { background: var(--success); }
+        .Busy, .Pending { background: var(--warning); }
+        .Maintenance, .Rejected { background: var(--danger); }
+        .empty { color: var(--muted); }
+    </style>
+</head>
+<body>
+    <header>
+        <h2>LabSync | Student</h2>
+        <div>
+            <span id="welcome"></span>
+            <button class="ghost" id="logoutBtn">Logout</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="card">
+            <h3>Available labs</h3>
+            <div id="labList"><p class="empty">Loading...</p></div>
+        </div>
+
+        <div class="card">
+            <h3>Request a lab slot</h3>
+            <form id="bookForm">
+                <label>Lab</label>
+                <select id="bookLab" required></select>
+
+                <div class="row">
+                    <div>
+                        <label>Date</label>
+                        <input type="date" id="bookDate" required>
+                    </div>
+                    <div>
+                        <label>Time slot</label>
+                        <select id="bookSlot" required>
+                            <option>9:00 - 10:00 AM</option>
+                            <option>10:00 - 11:00 AM</option>
+                            <option>11:00 AM - 12:00 PM</option>
+                            <option>1:00 - 2:00 PM</option>
+                            <option>2:00 - 3:00 PM</option>
+                            <option>3:00 - 4:00 PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label>Priority</label>
+                <select id="bookPriority">
+                    <option value="High">High (exam / deadline)</option>
+                    <option value="Medium" selected>Medium (project work)</option>
+                    <option value="Low">Low (practice)</option>
+                </select>
+
+                <label>Reason</label>
+                <textarea id="bookReason" rows="2" placeholder="e.g. Project submission on Friday" required></textarea>
+
+                <br><br>
+                <button type="submit">Send request</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>My requests</h3>
+            <div id="requestList"><p class="empty">Loading...</p></div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, addDoc, serverTimestamp }
+            from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // ---- Page guard ----
+        const user = JSON.parse(localStorage.getItem("currentUser"));
+        if (!user || user.role !== "student") {
+            window.location.href = "index.html";
+        }
+        document.getElementById("welcome").textContent = user ? user.name : "";
+        document.getElementById("logoutBtn").addEventListener("click", () => {
+            localStorage.removeItem("currentUser");
+            window.location.href = "index.html";
+        });
+
+        // ---- Firebase ----
+        const firebaseConfig = {
+            apiKey: "AIzaSyDXJ_RL5_5gFb5oUMCi1fF2YOJZ8s9i4qM",
+            authDomain: "mylabsync.firebaseapp.com",
+            projectId: "mylabsync",
+            storageBucket: "mylabsync.firebasestorage.app",
+            messagingSenderId: "144560486400",
+            appId: "1:144560486400:web:5bd10056296627f84880e5"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        function escapeHtml(text) {
+            const d = document.createElement("div");
+            d.textContent = text || "";
+            return d.innerHTML;
+        }
+
+        // Latest copies of the data, used for checks
+        let labsCache = [];
+        let bookingsCache = [];
+
+        // Block past dates in the date picker
+        document.getElementById("bookDate").min = new Date().toISOString().split("T")[0];
+
+        // ---- Labs: show live + fill the dropdown ----
+        const labList = document.getElementById("labList");
+        const bookLab = document.getElementById("bookLab");
+
+        onSnapshot(query(collection(db, "labs"), orderBy("createdAt")), (snapshot) => {
+            labsCache = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+            if (labsCache.length === 0) {
+                labList.innerHTML = '<p class="empty">No labs available yet.</p>';
+            } else {
+                labList.innerHTML = "";
+                labsCache.forEach((lab) => {
+                    const el = document.createElement("div");
+                    el.className = "lab";
+                    el.innerHTML = `
+                        <div class="lab-top">
+                            <h4>${escapeHtml(lab.name)}</h4>
+                            <span class="badge ${lab.status}">${lab.status === "Maintenance" ? "Under maintenance" : lab.status}</span>
+                        </div>
+                        <p><b>Resources:</b> ${escapeHtml(lab.resources) || "-"}</p>
+                        <p><b>Notes:</b> ${escapeHtml(lab.notes) || "-"}</p>`;
+                    labList.appendChild(el);
+                });
+            }
+
+            // Dropdown: labs under maintenance cannot be booked
+            const previous = bookLab.value;
+            bookLab.innerHTML = "";
+            labsCache.filter((lab) => lab.status !== "Maintenance").forEach((lab) => {
+                const opt = document.createElement("option");
+                opt.value = lab.id;
+                opt.textContent = lab.name;
+                bookLab.appendChild(opt);
+            });
+            if (bookLab.options.length === 0) {
+                bookLab.innerHTML = '<option value="">No labs available to book</option>';
+            } else if (previous) {
+                bookLab.value = previous;
+            }
+        });
+
+        // ---- Bookings: show this student's requests live ----
+        const requestList = document.getElementById("requestList");
+
+        onSnapshot(query(collection(db, "bookings"), orderBy("createdAt", "desc")), (snapshot) => {
+            bookingsCache = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            const mine = bookingsCache.filter((b) => b.studentEmail === user.email);
+
+            if (mine.length === 0) {
+                requestList.innerHTML = '<p class="empty">You have not sent any requests yet.</p>';
+                return;
+            }
+            requestList.innerHTML = "";
+            mine.forEach((b) => {
+                const el = document.createElement("div");
+                el.className = "request";
+                el.innerHTML = `
+                    <div class="lab-top">
+                        <h4>${escapeHtml(b.labName)}</h4>
+                        <span class="badge ${b.status}">${b.status}</span>
+                    </div>
+                    <p><b>Date:</b> ${escapeHtml(b.date)} &nbsp; <b>Slot:</b> ${escapeHtml(b.slot)}</p>
+                    <p><b>Priority:</b> ${escapeHtml(b.priority)} &nbsp; <b>Reason:</b> ${escapeHtml(b.reason)}</p>`;
+                requestList.appendChild(el);
+            });
+        });
+
+        // ---- Send a request ----
+        document.getElementById("bookForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const labId = bookLab.value;
+            const lab = labsCache.find((l) => l.id === labId);
+            const date = document.getElementById("bookDate").value;
+            const slot = document.getElementById("bookSlot").value;
+
+            if (!lab) { alert("Please choose a lab."); return; }
+            if (lab.status === "Maintenance") { alert("This lab is under maintenance."); return; }
+
+            // Slot already approved for someone else?
+            const taken = bookingsCache.some((b) =>
+                b.labId === labId && b.date === date && b.slot === slot && b.status === "Approved");
+            if (taken) { alert("That slot is already booked. Please pick another one."); return; }
+
+            // Same student already asked for the same slot?
+            const duplicate = bookingsCache.some((b) =>
+                b.labId === labId && b.date === date && b.slot === slot &&
+                b.studentEmail === user.email && b.status === "Pending");
+            if (duplicate) { alert("You already requested this slot."); return; }
+
+            await addDoc(collection(db, "bookings"), {
+                labId: labId,
+                labName: lab.name,
+                studentName: user.name,
+                studentEmail: user.email,
+                date: date,
+                slot: slot,
+                priority: document.getElementById("bookPriority").value,
+                reason: document.getElementById("bookReason").value.trim(),
+                status: "Pending",
+                createdAt: serverTimestamp()
+            });
+
+            e.target.reset();
+            alert("Request sent!");
+        });
+    </script>
+</body>
+</html>

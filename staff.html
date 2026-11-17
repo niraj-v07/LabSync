@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LabSync | Staff</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --text: #1c2430;
+            --muted: #6b7686;
+            --primary: #3b5bdb;
+            --success: #2f9e44;
+            --warning: #f08c00;
+            --danger: #e03131;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--card); padding: 14px 28px; border-bottom: 1px solid #e5e9f0;
+        }
+        header h2 { margin: 0; color: var(--primary); }
+        header span { color: var(--muted); font-size: 14px; margin-right: 12px; }
+        main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+        .card {
+            background: var(--card); border-radius: 14px; padding: 22px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 22px;
+        }
+        .card h3 { margin-top: 0; }
+        .card h4.section { margin: 22px 0 0; color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: .5px; }
+        label { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin: 12px 0 4px; }
+        input, select, textarea {
+            width: 100%; padding: 10px 12px; border: 1px solid #d5dbe5; border-radius: 8px;
+            font-family: inherit; font-size: 14px;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,91,219,.15);
+        }
+        button {
+            background: var(--primary); color: #fff; border: 0; padding: 10px 18px;
+            border-radius: 8px; font-family: inherit; font-weight: 600; cursor: pointer;
+        }
+        button.danger { background: var(--danger); }
+        button.good { background: var(--success); }
+        button.ghost { background: #edf2ff; color: var(--primary); }
+        .lab, .request { border: 1px solid #e5e9f0; border-radius: 12px; padding: 16px; margin-top: 14px; }
+        .lab-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .lab h4, .request h4 { margin: 0; font-size: 17px; }
+        .lab p, .request p { margin: 8px 0; color: var(--muted); font-size: 14px; }
+        .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; color: #fff; font-weight: 600; }
+        .Free, .Approved { background: var(--success); }
+        .Busy, .Pending { background: var(--warning); }
+        .Maintenance, .Rejected { background: var(--danger); }
+        .prio-High { background: var(--danger); }
+        .prio-Medium { background: var(--warning); }
+        .prio-Low { background: #868e96; }
+        .badges { display: flex; gap: 6px; }
+        .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .actions select { width: auto; }
+        .empty { color: var(--muted); }
+    </style>
+</head>
+<body>
+    <header>
+        <h2>LabSync | Staff</h2>
+        <div>
+            <span id="welcome"></span>
+            <button class="ghost" id="logoutBtn">Logout</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="card">
+            <h3>Booking requests</h3>
+            <h4 class="section">Pending (highest priority first)</h4>
+            <div id="pendingList"><p class="empty">Loading...</p></div>
+            <h4 class="section">Decided</h4>
+            <div id="decidedList"><p class="empty">Loading...</p></div>
+        </div>
+
+        <div class="card">
+            <h3>Add a lab</h3>
+            <form id="labForm">
+                <label>Lab name</label>
+                <input id="labName" placeholder="e.g. Computer Lab 1" required>
+
+                <label>Resources (comma separated)</label>
+                <textarea id="labResources" rows="2" placeholder="e.g. 40 PCs, Projector, Arduino kits"></textarea>
+
+                <label>Status</label>
+                <select id="labStatus">
+                    <option value="Free">Free</option>
+                    <option value="Busy">Busy</option>
+                    <option value="Maintenance">Under maintenance</option>
+                </select>
+
+                <label>Notes (optional)</label>
+                <input id="labNotes" placeholder="e.g. AC not working">
+
+                <br><br>
+                <button type="submit">Add lab</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Labs</h3>
+            <div id="labList"><p class="empty">Loading...</p></div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, updateDoc, doc, query, orderBy, serverTimestamp }
+            from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // ---- Page guard ----
+        const user = JSON.parse(localStorage.getItem("currentUser"));
+        if (!user || user.role !== "staff") {
+            window.location.href = "index.html";
+        }
+        document.getElementById("welcome").textContent = user ? user.name : "";
+        document.getElementById("logoutBtn").addEventListener("click", () => {
+            localStorage.removeItem("currentUser");
+            window.location.href = "index.html";
+        });
+
+        // ---- Firebase ----
+        const firebaseConfig = {
+            apiKey: "AIzaSyDXJ_RL5_5gFb5oUMCi1fF2YOJZ8s9i4qM",
+            authDomain: "mylabsync.firebaseapp.com",
+            projectId: "mylabsync",
+            storageBucket: "mylabsync.firebasestorage.app",
+            messagingSenderId: "144560486400",
+            appId: "1:144560486400:web:5bd10056296627f84880e5"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const labsRef = collection(db, "labs");
+        const bookingsRef = collection(db, "bookings");
+
+        function escapeHtml(text) {
+            const d = document.createElement("div");
+            d.textContent = text || "";
+            return d.innerHTML;
+        }
+
+        // =====================  BOOKING REQUESTS  =====================
+        const pendingList = document.getElementById("pendingList");
+        const decidedList = document.getElementById("decidedList");
+        let bookingsCache = [];
+        const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+
+        function requestCard(b, withButtons) {
+            const el = document.createElement("div");
+            el.className = "request";
+            el.innerHTML = `
+                <div class="lab-top">
+                    <h4>${escapeHtml(b.labName)}</h4>
+                    <div class="badges">
+                        <span class="badge prio-${b.priority}">${escapeHtml(b.priority)} priority</span>
+                        <span class="badge ${b.status}">${b.status}</span>
+                    </div>
+                </div>
+                <p><b>Student:</b> ${escapeHtml(b.studentName)} (${escapeHtml(b.studentEmail)})</p>
+                <p><b>Date:</b> ${escapeHtml(b.date)} &nbsp; <b>Slot:</b> ${escapeHtml(b.slot)}</p>
+                <p><b>Reason:</b> ${escapeHtml(b.reason)}</p>
+                ${withButtons ? `
+                <div class="actions">
+                    <button class="good approveBtn" data-id="${b.id}">Approve</button>
+                    <button class="danger rejectBtn" data-id="${b.id}">Reject</button>
+                </div>` : ""}`;
+            return el;
+        }
+
+        onSnapshot(query(bookingsRef, orderBy("createdAt", "desc")), (snapshot) => {
+            bookingsCache = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+            const pending = bookingsCache
+                .filter((b) => b.status === "Pending")
+                .sort((a, b) => (PRIORITY_RANK[a.priority] ?? 3) - (PRIORITY_RANK[b.priority] ?? 3));
+            const decided = bookingsCache.filter((b) => b.status !== "Pending");
+
+            pendingList.innerHTML = pending.length ? "" : '<p class="empty">No pending requests.</p>';
+            pending.forEach((b) => pendingList.appendChild(requestCard(b, true)));
+
+            decidedList.innerHTML = decided.length ? "" : '<p class="empty">Nothing decided yet.</p>';
+            decided.forEach((b) => decidedList.appendChild(requestCard(b, false)));
+        });
+
+        document.getElementById("pendingList").addEventListener("click", async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            const booking = bookingsCache.find((b) => b.id === id);
+            if (!booking) return;
+
+            if (e.target.classList.contains("approveBtn")) {
+                // Do not approve two requests for the same lab, date and slot
+                const clash = bookingsCache.some((b) =>
+                    b.id !== id && b.status === "Approved" &&
+                    b.labId === booking.labId && b.date === booking.date && b.slot === booking.slot);
+                if (clash) {
+                    alert("Another request is already approved for this lab, date and slot. Reject this one instead.");
+                    return;
+                }
+                await updateDoc(doc(db, "bookings", id), { status: "Approved" });
+            }
+
+            if (e.target.classList.contains("rejectBtn")) {
+                await updateDoc(doc(db, "bookings", id), { status: "Rejected" });
+            }
+        });
+
+        // =====================  LABS  =====================
+        document.getElementById("labForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            await addDoc(labsRef, {
+                name: document.getElementById("labName").value.trim(),
+                resources: document.getElementById("labResources").value.trim(),
+                status: document.getElementById("labStatus").value,
+                notes: document.getElementById("labNotes").value.trim(),
+                createdAt: serverTimestamp()
+            });
+            e.target.reset();
+        });
+
+        const labList = document.getElementById("labList");
+        onSnapshot(query(labsRef, orderBy("createdAt")), (snapshot) => {
+            if (snapshot.empty) {
+                labList.innerHTML = '<p class="empty">No labs yet. Add one above.</p>';
+                return;
+            }
+            labList.innerHTML = "";
+            snapshot.forEach((d) => {
+                const lab = d.data();
+                const el = document.createElement("div");
+                el.className = "lab";
+                el.innerHTML = `
+                    <div class="lab-top">
+                        <h4>${escapeHtml(lab.name)}</h4>
+                        <span class="badge ${lab.status}">${lab.status === "Maintenance" ? "Under maintenance" : lab.status}</span>
+                    </div>
+                    <p><b>Resources:</b> ${escapeHtml(lab.resources) || "-"}</p>
+                    <p><b>Notes:</b> ${escapeHtml(lab.notes) || "-"}</p>
+                    <div class="actions">
+                        <select data-id="${d.id}" class="statusSelect">
+                            <option value="Free" ${lab.status === "Free" ? "selected" : ""}>Free</option>
+                            <option value="Busy" ${lab.status === "Busy" ? "selected" : ""}>Busy</option>
+                            <option value="Maintenance" ${lab.status === "Maintenance" ? "selected" : ""}>Under maintenance</option>
+                        </select>
+                        <button class="danger deleteBtn" data-id="${d.id}">Delete</button>
+                    </div>`;
+                labList.appendChild(el);
+            });
+        });
+
+        labList.addEventListener("change", async (e) => {
+            if (e.target.classList.contains("statusSelect")) {
+                await updateDoc(doc(db, "labs", e.target.dataset.id), { status: e.target.value });
+            }
+        });
+        labList.addEventListener("click", async (e) => {
+            if (e.target.classList.contains("deleteBtn")) {
+                if (confirm("Delete this lab?")) {
+                    await deleteDoc(doc(db, "labs", e.target.dataset.id));
+                }
+            }
+        });
+    </script>
+</body>
+</html>
